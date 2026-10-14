@@ -15,6 +15,67 @@ if (menuBtn) {
   });
 }
 
+const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// Hero füllt das Fenster unter Vorschau-Band, Kopfleiste und Kopf: deren Höhe als --kopf
+const setKopf = () => header && document.documentElement.style.setProperty("--kopf", `${Math.round(header.getBoundingClientRect().bottom + window.scrollY)}px`);
+setKopf();
+window.addEventListener("resize", setKopf);
+
+// Überschrift zeilenweise: Wörter mit gleicher Oberkante bilden eine Zeile, --l steuert die Verzögerung
+const heroWords = [...document.querySelectorAll(".hero h1 .w")];
+const lineUp = () => {
+  let line = -1;
+  let top = null;
+  for (const w of heroWords) {
+    if (w.offsetTop !== top) { top = w.offsetTop; line += 1; }
+    w.style.setProperty("--l", line);
+  }
+};
+if (heroWords.length) { lineUp(); document.fonts?.ready.then(lineUp); }
+
+// Abschnitte steigen beim Einscrollen auf (einmalig); Kennzahlen zählen dabei hoch
+if (!calm && "IntersectionObserver" in window) {
+  const count = (dd) => {
+    const target = Number(dd.dataset.count);
+    const final = dd.textContent;
+    const unit = final.replace(/^[\d.]+/, "");
+    const start = performance.now();
+    const step = (now) => {
+      const t = Math.min((now - start) / 1400, 1);
+      const v = Math.round(target * (1 - (1 - t) ** 3));
+      dd.textContent = t < 1 ? v.toLocaleString("de-DE") + unit : final;
+      if (t < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  };
+  const io = new IntersectionObserver((entries) => entries.forEach((e) => {
+    if (!e.isIntersecting) return;
+    e.target.classList.add("is-in");
+    e.target.querySelectorAll("[data-count]").forEach(count);
+    io.unobserve(e.target);
+  }), { rootMargin: "0px 0px -10% 0px" });
+  document.querySelectorAll("main > .sec > .wrap").forEach((el) => {
+    el.classList.add("rv");
+    io.observe(el);
+  });
+}
+
+// Ein Werk, fünf Marken: Überfahren, Fokus oder Antippen wählt den Namen, seine Zeile blendet ein
+document.querySelectorAll("[data-marken]").forEach((box) => {
+  const btns = box.querySelectorAll(".marke");
+  const rows = box.querySelectorAll(".marken__d p");
+  const pick = (i) => {
+    btns.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.i === i)));
+    rows.forEach((p) => p.classList.toggle("is-on", p.dataset.i === i));
+  };
+  btns.forEach((b) => {
+    b.addEventListener("click", () => pick(b.dataset.i));
+    b.addEventListener("focus", () => pick(b.dataset.i));
+    b.addEventListener("pointerenter", (e) => { if (e.pointerType === "mouse") pick(b.dataset.i); });
+  });
+});
+
 // Bildbetrachter: Links mit data-lightbox öffnen das große Bild; ohne JS öffnet der Link das Bild selbst
 const lb = document.querySelector("[data-lb]");
 if (lb && typeof lb.showModal === "function") {
@@ -74,65 +135,6 @@ document.querySelectorAll("form[data-mailto]").forEach((form) => {
     box.querySelector("textarea").value = `${form.dataset.to}: ${mailto}\n${form.dataset.subj}: ${subject}\n\n${text}`;
     box.hidden = false;
     form.querySelector("[data-sent]").textContent = form.dataset.sentText;
-  });
-});
-
-// Bewegung: Einblenden beim Scrollen und hochzählende Zahlen; ohne Beobachter oder bei reduzierter Bewegung bleibt alles stehen
-const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-if ("IntersectionObserver" in window && !still) {
-  document.documentElement.classList.add("js");
-  const reveal = new IntersectionObserver((entries) => entries.forEach((e) => {
-    if (!e.isIntersecting) return;
-    e.target.classList.add("is-in");
-    reveal.unobserve(e.target);
-  }), { rootMargin: "0px 0px -8% 0px" });
-  document.querySelectorAll("[data-reveal]").forEach((el) => reveal.observe(el));
-
-  const count = (el) => {
-    const final = el.textContent;
-    const sep = (final.match(/[.,]/) || [""])[0];
-    const target = parseInt(final.replace(/\D/g, ""), 10);
-    el.style.minWidth = `${el.offsetWidth}px`; // Breite halten, sonst springt der Satz
-    const start = performance.now();
-    const step = (now) => {
-      const t = Math.min((now - start) / 1600, 1);
-      const v = Math.round(target * (1 - Math.pow(1 - t, 3)));
-      el.textContent = t < 1 ? String(v).replace(/\B(?=(\d{3})+(?!\d))/g, sep) : final;
-      if (t < 1) requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
-  };
-  const counter = new IntersectionObserver((entries) => entries.forEach((e) => {
-    if (!e.isIntersecting) return;
-    count(e.target);
-    counter.unobserve(e.target);
-  }), { threshold: 0.6 });
-  document.querySelectorAll("[data-count]").forEach((el) => counter.observe(el));
-}
-
-// Produktfamilien: das Bild rechts folgt der Zeile unter Maus oder Fokus
-document.querySelectorAll(".fam").forEach((fam) => {
-  const views = fam.querySelectorAll(".fam__view img");
-  const rows = fam.querySelectorAll("[data-fam]");
-  const pick = (row) => {
-    views.forEach((v, i) => v.classList.toggle("is-on", String(i) === row.dataset.fam));
-    rows.forEach((r) => r.classList.toggle("is-on", r === row));
-  };
-  rows.forEach((row) => {
-    row.addEventListener("mouseenter", () => pick(row));
-    row.addEventListener("focus", () => pick(row));
-  });
-  fam.addEventListener("mouseleave", () => rows.forEach((r) => r.classList.remove("is-on")));
-});
-
-// Laufschrift der Marken: anhalten und fortsetzen (WCAG 2.2.2)
-document.querySelectorAll("[data-mq-btn]").forEach((btn) => {
-  const section = btn.closest(".marken");
-  const pauseLabel = btn.textContent;
-  btn.addEventListener("click", () => {
-    const paused = section.classList.toggle("is-paused");
-    btn.setAttribute("aria-pressed", String(paused));
-    btn.textContent = paused ? btn.dataset.lPlay : pauseLabel;
   });
 });
 
