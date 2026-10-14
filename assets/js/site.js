@@ -34,6 +34,44 @@ const lineUp = () => {
 };
 if (heroWords.length) { lineUp(); document.fonts?.ready.then(lineUp); }
 
+// Vom Stahl zur Wärme: die Bühne klebt unter dem Kopf, die Scrollstrecke durch den Abschnitt wählt den Schritt.
+// Natives Scrollen, kein Einrasten; bei weniger Bewegung bleibt die Liste untereinander stehen.
+const storyEl = document.querySelector("[data-story]");
+if (storyEl && !calm) {
+  storyEl.classList.add("story--on");
+  const frame = storyEl.querySelector(".story__frame");
+  const steps = storyEl.querySelectorAll(".story__step");
+  const bars = storyEl.querySelectorAll(".story__bar span");
+  let cur = -1;
+  let queued = false;
+  const update = () => {
+    queued = false;
+    const kopf = header ? header.offsetHeight : 0;
+    document.documentElement.style.setProperty("--kopfh", `${kopf}px`);
+    const r = storyEl.getBoundingClientRect();
+    const run = r.height - frame.offsetHeight;
+    const p = run > 0 ? Math.min(Math.max((kopf - r.top) / run, 0), 0.9999) : 0;
+    const i = Math.floor(p * steps.length);
+    if (i === cur) return;
+    cur = i;
+    steps.forEach((s, k) => s.classList.toggle("is-on", k === i));
+    bars.forEach((b, k) => { b.classList.toggle("is-on", k === i); b.classList.toggle("is-done", k < i); });
+  };
+  const queue = () => { if (!queued) { queued = true; requestAnimationFrame(update); } };
+  window.addEventListener("scroll", queue, { passive: true });
+  window.addEventListener("resize", () => { cur = -1; queue(); });
+  update();
+  // Alle fünf Fotos laden, sobald der Abschnitt ein Fenster entfernt ist
+  if ("IntersectionObserver" in window) {
+    const near = new IntersectionObserver((entries) => {
+      if (!entries.some((e) => e.isIntersecting)) return;
+      storyEl.querySelectorAll("img").forEach((im) => { im.loading = "eager"; });
+      near.disconnect();
+    }, { rootMargin: "100% 0px" });
+    near.observe(storyEl);
+  }
+}
+
 // Abschnitte steigen beim Einscrollen auf (einmalig); Kennzahlen zählen dabei hoch
 if (!calm && "IntersectionObserver" in window) {
   const count = (dd) => {
